@@ -1,8 +1,10 @@
 import chalk from "chalk";
+import { readFile } from "fs/promises";
+import { join } from "path";
+import ui from "readline-ui";
 
 const transpose = <T>(matrix: T[][]) => matrix.map((_, i) => matrix.map((row) => row[i]));
 const isUnique = (list: number[]) => new Set(list.filter(Boolean)).size === list.filter(Boolean).length;
-const intersection = <T>(...arrays: T[][]) => arrays.reduce((a, b) => a.filter((x) => b.includes(x)));
 const difference = <T>(...arrays: T[][]) => arrays.reduce((a, b) => a.filter((x) => !b.includes(x)));
 
 class Sudoku {
@@ -12,6 +14,7 @@ class Sudoku {
     constructor(board: string | number[][]) {
         this.#board = typeof board === "string"
             ? board
+                .replace(/ /g, "0") // change spaces to zero
                 .replace(/[^0-9\n]/g, "").trim() // delete all irrelevant characters
                 .split("\n").map((line) => line.split("").map(Number))
             : board.map((row) => [...row]); // shallow copy the given board
@@ -75,7 +78,9 @@ class Sudoku {
         (function backtrack() {
             console.clear();
 
-            board.print("none");
+            console.log(chalk.green("solving..."));
+
+            console.log(board.toString("high"));
 
             if (!board.okay) return;
 
@@ -91,6 +96,7 @@ class Sudoku {
                 modified.push(...board.#rule1(x, y));
                 modified.push(...board.#rule2(x, y));
                 modified.push(...board.#rule3(x, y));
+                modified.push(...board.#rule4(x, y));
 
                 board.set(x, y, candidate);
 
@@ -145,7 +151,7 @@ class Sudoku {
         const modified: [number, number][] = [];
 
         for (let j = x; j < 9; j++) {
-            const allowed = this.#columns[j].map((_, i) =>   this.candidates(j, i));
+            const allowed = this.#columns[j].map((_, i) => this.candidates(j, i));
 
             const diffs = allowed.map((candidates, i) => difference(candidates, ...allowed.filter((_, j) => j !== i)));
             
@@ -154,6 +160,30 @@ class Sudoku {
                     this.set(j, i, diff[0]);
 
                     modified.push([j, i]);
+                }
+            });
+        }
+
+        return modified;
+    }
+
+    #rule4(x: number, y: number) {
+        const modified: [number, number][] = [];
+
+        const index = (y / 3 | 0) * 3 + (x / 3 | 0);
+
+        for (let k = index; k < 9; k++) {
+            const indices = [0, 1, 2, 9, 10, 11, 18, 19, 20].map((v) => v + 3 * k + 18 * (k / 3 | 0));
+
+            const allowed = indices.map((i) => this.candidates(i % 9, i / 9 | 0));
+
+            const diffs = allowed.map((candidates, i) => difference(candidates, ...allowed.filter((_, j) => j !== i)));
+            
+            diffs.forEach((diff, i) => {
+                if (diff.length === 1) {
+                    this.set(indices[i] % 9, indices[i] / 9 | 0, diff[0]);
+
+                    modified.push([indices[i] % 9, indices[i] / 9 | 0]);
                 }
             });
         }
@@ -192,9 +222,9 @@ class Sudoku {
         return new Sudoku(this.#board);
     }
 
-    print(detail: "none" | "low" | "high" = "none") {
+    toString(detail: "none" | "low" | "high" = "none") {
         if (detail === "none") {
-            return console.log(this.#board.map((row) => row.join("")).join("\n"));
+            return this.#board.map((row) => row.join("")).join("\n");
         }
 
         if (detail === "low") {
@@ -202,7 +232,7 @@ class Sudoku {
                 `+${"---+".repeat(9)}`,
             ].concat(this.#board.flatMap((line) => [`|${line.map((cell) => ` ${cell || " "} |`).join("")}`, `+${"---+".repeat(9)}`]));
     
-            return console.log(lines.join("\n"));
+            return lines.join("\n");
         }
 
         if (detail === "high") {
@@ -215,29 +245,89 @@ class Sudoku {
                 ]
             ));
 
-            return console.log(lines.join("\n"));
+            return lines.join("\n");
         }
+
+        throw new TypeError("unknown detail");
     }
 }
 
-const board = new Sudoku(`\
-    100060000
-    980000605
-    000005001
-    000000304
-    060130900
-    040720000
-    093076100
-    006480007
-    500902460
-`);
+try {
+    const board = process.argv[2]
+        ? new Sudoku(await readFile(join(process.cwd(), process.argv[2]), "utf8"))
+        : await (() => new Promise<Sudoku>((resolve) => {
+        const board = new Sudoku(Array(9).fill(0).map(() => Array(9).fill(0)));
 
-board.print("high");
+        console.clear();
 
-const solutions = board.solve();
+        const input = ui.create();
 
-if (solutions) {
-    solutions.map((s) => s.print("high"));
-} else {
-    console.log("not solvable");
+        let x = 0;
+        let y = 0;
+
+        const render = () => {
+            input.render(chalk.dim("use arrow keys and 0-9\n") + board.toString("high"));
+
+            process.stdout.write("\x1b[0;0H");
+
+            process.stdout.write(`\x1b[${x * 4 + 2}C`);
+            process.stdout.write(`\x1b[${y * 2 + 2}B`);
+        };
+
+        const done = () => timeout = setTimeout(() => {
+            input.close();
+
+            resolve(board);
+        }, 5);
+
+        render();
+
+        let timeout: NodeJS.Timeout;
+
+        input.on("keypress", (key: string) => {
+            clearTimeout(timeout);
+
+            if (key === "left" && x > 0) x--;
+            if (key === "right" && x < 8) x++;
+            if (key === "up" && y > 0) y--;
+            if (key === "down" && y < 8) y++;
+
+            if (key === "number" || key === "space") {
+                board.set(x++, y, +input.rl.line.at(-1).trim() || 0);
+
+                if (x > 8 && y < 8) (x = 0, y++);
+                if (x > 8) x = 8;
+            }
+            
+            if (key === "backspace") {
+                board.delete(x--, y);
+
+                if (x < 0 && y > 0) (x = 8, y--);
+                if (x < 0) x = 0;
+            }
+
+            render();
+        });
+
+        input.on("line", done);
+    }))();
+
+    const solutions = board.solve();
+
+    if (solutions) {
+        console.clear();
+
+        console.log(chalk.cyan("solved"));
+
+        console.log(solutions[0].toString("high"));
+    } else {
+        console.clear();
+
+        console.log(chalk.red("not solvable"));
+
+        console.log(board.toString("high"));
+    }
+} catch (e) {
+    if (e instanceof Error) console.log(chalk.red(e.message));
+    else console.log(chalk.red("unknown error"));
 }
