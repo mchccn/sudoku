@@ -2,6 +2,8 @@ import chalk from "chalk";
 
 const transpose = <T>(matrix: T[][]) => matrix.map((_, i) => matrix.map((row) => row[i]));
 const isUnique = (list: number[]) => new Set(list.filter(Boolean)).size === list.filter(Boolean).length;
+const intersection = <T>(...arrays: T[][]) => arrays.reduce((a, b) => a.filter((x) => b.includes(x)));
+const difference = <T>(...arrays: T[][]) => arrays.reduce((a, b) => a.filter((x) => !b.includes(x)));
 
 class Sudoku {
     #board: number[][];
@@ -24,7 +26,15 @@ class Sudoku {
     }
 
     get board() {
+        return this.#rows;
+    }
+
+    get #rows() {
         return this.#board.map((row) => [...row]);
+    }
+
+    get #columns() {
+        return transpose(this.#board);
     }
 
     get #squares() {
@@ -34,8 +44,8 @@ class Sudoku {
     }
 
     get okay() {
-        const rows = this.#board.every(isUnique);
-        const columns = transpose(this.#board).every(isUnique);
+        const rows = this.#rows.every(isUnique);
+        const columns = this.#columns.every(isUnique);
         const squares = this.#squares.every(isUnique);
 
         return rows && columns && squares;
@@ -51,8 +61,8 @@ class Sudoku {
         if (this.#board[y][x]) return [];
 
         return [...Array(9).keys()].map((v) => v + 1)
-            .filter((v) => !this.#board[y].includes(v))
-            .filter((v) => !this.#board.map((row) => row[x]).includes(v))
+            .filter((v) => !this.#rows[y].includes(v))
+            .filter((v) => !this.#columns[x].includes(v))
             .filter((v) => !this.#squares[(y / 3 | 0) * 3 + (x / 3 | 0)].includes(v))
     }
 
@@ -78,17 +88,9 @@ class Sudoku {
             return board.candidates(x, y).forEach((candidate) => {
                 const modified = [[x, y]];
 
-                for (let i = y; i < 9; i++) {
-                    for (let j = x + 1; j < 9; j++) {
-                        const candidates = board.candidates(j, i);
-    
-                        if (candidates.length !== 1) continue;
-    
-                        board.set(j, i, candidates[0]);
-    
-                        modified.push([j, i]);
-                    }
-                }
+                modified.push(...board.#rule1(x, y));
+                modified.push(...board.#rule2(x, y));
+                modified.push(...board.#rule3(x, y));
 
                 board.set(x, y, candidate);
 
@@ -99,6 +101,64 @@ class Sudoku {
         })();
 
         return solutions.length ? solutions : undefined;
+    }
+
+    #rule1(x: number, y: number) {
+        const modified: [number, number][] = [];
+
+        for (let i = y; i < 9; i++) {
+            for (let j = x + 1; j < 9; j++) {
+                const candidates = this.candidates(j, i);
+
+                if (candidates.length !== 1) continue;
+
+                this.set(j, i, candidates[0]);
+
+                modified.push([j, i]);
+            }
+        }
+
+        return modified;
+    }
+
+    #rule2(x: number, y: number) {
+        const modified: [number, number][] = [];
+
+        for (let i = y; i < 9; i++) {
+            const allowed = this.#rows[i].map((_, j) => this.candidates(j, i));
+
+            const diffs = allowed.map((candidates, i) => difference(candidates, ...allowed.filter((_, j) => j !== i)));
+            
+            diffs.forEach((diff, j) => {
+                if (diff.length === 1) {
+                    this.set(j, i, diff[0]);
+
+                    modified.push([j, i]);
+                }
+            });
+        }
+
+        return modified;
+    }
+
+    #rule3(x: number, y: number) {
+        const modified: [number, number][] = [];
+
+        for (let j = x; j < 9; j++) {
+            const allowed = this.#columns[j].map((_, i) =>   this.candidates(j, i));
+
+            const diffs = allowed.map((candidates, i) => difference(candidates, ...allowed.filter((_, j) => j !== i)));
+            
+            diffs.forEach((diff, i) => {
+                if (diff.length === 1) {
+                    this.set(j, i, diff[0]);
+
+                    modified.push([j, i]);
+                }
+            });
+        }
+
+        return modified;
     }
 
     set(x: number, y: number, value: number) {
@@ -122,8 +182,8 @@ class Sudoku {
     }
 
     #nextOpenCell() {
-        const y = this.#board.findIndex((row) => row.includes(0));
-        const x = y >= 0 ? this.#board[y].indexOf(0) : -1;
+        const y = this.#rows.findIndex((row) => row.includes(0));
+        const x = y >= 0 ? this.#rows[y].indexOf(0) : -1;
 
         return [x, y] as [x: number, y: number];
     }
@@ -165,7 +225,7 @@ const board = new Sudoku(`\
     980000605
     000005001
     000000304
-    060000900
+    060130900
     040720000
     093076100
     006480007
