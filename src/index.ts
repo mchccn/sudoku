@@ -73,6 +73,7 @@ class Sudoku {
         if (!this.okay) return undefined;
 
         const board = new Sudoku(this.#board);
+        
         const solutions: Sudoku[] = [];
 
         (function backtrack() {
@@ -223,6 +224,10 @@ class Sudoku {
         return new Sudoku(this.#board);
     }
 
+    hash() {
+        return this.#board.flat().join("");
+    }
+
     toString(detail: "none" | "low" | "high" = "none") {
         if (detail === "none") {
             return this.#board.map((row) => row.join("")).join("\n");
@@ -320,11 +325,11 @@ try {
     console.clear();
 
     if (solutions) {
-        console.log(chalk.cyan(`solved (${solutions.length} solution${solutions.length === 1 ? "" : "s"})`));
+        console.log(chalk.cyan(`${solutions.length} solution${solutions.length === 1 ? "" : "s"} found`));
 
         console.log(solutions[0].toString("high"));
     } else {
-        console.log(chalk.red("not solvable"));
+        console.log(chalk.red("no solutions found"));
 
         console.log(board.toString("high"));
     }
