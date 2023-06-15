@@ -268,10 +268,10 @@ try {
         const render = () => {
             input.render(chalk.dim("use arrow keys and 0-9\n") + board.toString("high"));
 
-            process.stdout.write("\x1b[0;0H");
+            process.stdout.write("\x1b[0;0H"); // move cursor to (0, 0)
 
-            process.stdout.write(`\x1b[${x * 4 + 2}C`);
-            process.stdout.write(`\x1b[${y * 2 + 2}B`);
+            process.stdout.write(`\x1b[${x * 4 + 2}C`); // move cursor right
+            process.stdout.write(`\x1b[${y * 2 + 2}B`); // move cursor down
         };
 
         const done = () => timeout = setTimeout(() => {
@@ -287,8 +287,8 @@ try {
         input.on("keypress", (key: string) => {
             clearTimeout(timeout);
 
-            if (key === "left" && x > 0) x--;
-            if (key === "right" && x < 8) x++;
+            if (key === "left") if (x > 0) x--; else if (x <= 0 && y > 0) (x = 8, y--);
+            if (key === "right") if (x < 8) x++; else if (x >= 8 && y < 8) (x = 0, y++);
             if (key === "up" && y > 0) y--;
             if (key === "down" && y < 8) y++;
 
@@ -305,6 +305,8 @@ try {
                 if (x < 0 && y > 0) (x = 8, y--);
                 if (x < 0) x = 0;
             }
+
+            input.rl.line = ""; // reset line because arrow keys mess it up
 
             render();
         });
