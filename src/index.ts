@@ -259,6 +259,8 @@ try {
         : await (() => new Promise<Sudoku>((resolve) => {
         const board = new Sudoku(Array(9).fill(0).map(() => Array(9).fill(0)));
 
+        console.clear();
+
         const input = ui.create();
 
         let x = 0;
