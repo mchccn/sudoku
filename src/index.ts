@@ -76,11 +76,12 @@ class Sudoku {
         const solutions: Sudoku[] = [];
 
         (function backtrack() {
-            console.clear();
+            process.stdout.cursorTo(0, 0);
+            process.stdout.clearScreenDown();
 
-            console.log(chalk.green("solving..."));
+            process.stdout.write(chalk.green(`solving... ${solutions.length} solution${solutions.length === 1 ? "" : "s"}`) + "\n");
 
-            console.log(board.toString("high"));
+            process.stdout.write(board.toString("high") + "\n");
 
             if (!board.okay) return;
 
@@ -258,8 +259,6 @@ try {
         : await (() => new Promise<Sudoku>((resolve) => {
         const board = new Sudoku(Array(9).fill(0).map(() => Array(9).fill(0)));
 
-        console.clear();
-
         const input = ui.create();
 
         let x = 0;
@@ -316,15 +315,13 @@ try {
 
     const solutions = board.solve();
 
-    if (solutions) {
-        console.clear();
+    console.clear();
 
-        console.log(chalk.cyan("solved"));
+    if (solutions) {
+        console.log(chalk.cyan(`solved (${solutions.length} solution${solutions.length === 1 ? "" : "s"})`));
 
         console.log(solutions[0].toString("high"));
     } else {
-        console.clear();
-
         console.log(chalk.red("not solvable"));
 
         console.log(board.toString("high"));
